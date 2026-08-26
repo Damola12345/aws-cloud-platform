@@ -30,6 +30,15 @@ jobs:
         working-directory: terraform
         run: terraform fmt -check -recursive
 
+      # Must run BEFORE terraform init: init contacts the S3 backend
+      # immediately (reading/creating the state file), so credentials have
+      # to exist before init, not just before plan.
+      - name: Configure AWS credentials (read-only CI role)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_CI_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
       - name: terraform init
         working-directory: ${{ env.TF_ENV_DIR }}
         run: terraform init -backend=true
@@ -37,14 +46,6 @@ jobs:
       - name: terraform validate
         working-directory: ${{ env.TF_ENV_DIR }}
         run: terraform validate
-
-      # Read-only OIDC role - can describe/list/get AWS resources and read
-      # the state bucket, cannot create/modify/delete anything.
-      - name: Configure AWS credentials (read-only CI role)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_CI_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
 
       - name: terraform plan
         working-directory: ${{ env.TF_ENV_DIR }}
