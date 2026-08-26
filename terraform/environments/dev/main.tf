@@ -53,13 +53,13 @@ locals {
 module "vpc" {
   source = "../../modules/vpc"
 
-  name                  = local.name
-  vpc_cidr              = var.vpc_cidr
-  azs                   = var.azs
-  public_subnet_cidrs   = var.public_subnet_cidrs
-  private_subnet_cidrs  = var.private_subnet_cidrs
-  single_nat_gateway    = true # dev: cost over resilience
-  tags                  = local.tags
+  name                 = local.name
+  vpc_cidr             = var.vpc_cidr
+  azs                  = var.azs
+  public_subnet_cidrs  = var.public_subnet_cidrs
+  private_subnet_cidrs = var.private_subnet_cidrs
+  single_nat_gateway   = true # dev: cost over resilience
+  tags                 = local.tags
 }
 
 # ---------------------------------------------------------------------------
@@ -102,14 +102,14 @@ module "dns" {
 module "monitoring" {
   source = "../../modules/monitoring"
 
-  name                     = local.name
-  log_retention_days       = var.log_retention_days
-  alarm_email              = var.alarm_email
-  alb_arn_suffix           = module.alb.alb_arn_suffix
-  target_group_arn_suffix  = module.alb.target_group_arn_suffix
-  ecs_cluster_name         = local.cluster_name
-  ecs_service_name         = local.service_name
-  tags                     = local.tags
+  name                    = local.name
+  log_retention_days      = var.log_retention_days
+  alarm_email             = var.alarm_email
+  alb_arn_suffix          = module.alb.alb_arn_suffix
+  target_group_arn_suffix = module.alb.target_group_arn_suffix
+  ecs_cluster_name        = local.cluster_name
+  ecs_service_name        = local.service_name
+  tags                    = local.tags
 }
 
 # ---------------------------------------------------------------------------
@@ -118,15 +118,15 @@ module "monitoring" {
 module "iam" {
   source = "../../modules/iam"
 
-  name                  = local.name
-  ecr_repository_arn    = module.ecr.repository_arn
-  ecs_cluster_arn       = local.ecs_cluster_arn
-  ecs_service_arn       = local.ecs_service_arn
-  log_group_arn         = module.monitoring.log_group_arn
-  github_org            = var.github_org
-  github_repo           = var.github_repo
-  environment           = var.environment
-  tags                  = local.tags
+  name               = local.name
+  ecr_repository_arn = module.ecr.repository_arn
+  ecs_cluster_arn    = local.ecs_cluster_arn
+  ecs_service_arn    = local.ecs_service_arn
+  log_group_arn      = module.monitoring.log_group_arn
+  github_org         = var.github_org
+  github_repo        = var.github_repo
+  environment        = var.environment
+  tags               = local.tags
 }
 
 # ---------------------------------------------------------------------------
@@ -135,23 +135,23 @@ module "iam" {
 module "ecs" {
   source = "../../modules/ecs"
 
-  name                   = local.name
-  cluster_name           = local.cluster_name
-  service_name           = local.service_name
-  vpc_id                 = module.vpc.vpc_id
-  private_subnet_ids     = module.vpc.private_subnet_ids
-  alb_security_group_id  = module.alb.alb_security_group_id
-  target_group_arn       = module.alb.target_group_arn
-  https_listener_arn     = module.alb.https_listener_arn
-  ecr_repository_url     = module.ecr.repository_url
-  container_port         = var.container_port
-  desired_count           = var.desired_count
-  min_capacity            = var.min_capacity
-  max_capacity            = var.max_capacity
-  app_env                 = var.environment
-  execution_role_arn      = module.iam.ecs_task_execution_role_arn
-  task_role_arn            = module.iam.ecs_task_role_arn
-  log_group_name           = module.monitoring.log_group_name
-  aws_region                = var.aws_region
-  tags                      = local.tags
+  name                  = local.name
+  cluster_name          = local.cluster_name
+  service_name          = local.service_name
+  vpc_id                = module.vpc.vpc_id
+  private_subnet_ids    = module.vpc.private_subnet_ids
+  alb_security_group_id = module.alb.alb_security_group_id
+  target_group_arn      = module.alb.target_group_arn
+  https_listener_arn    = module.alb.https_listener_arn
+  ecr_repository_url    = module.ecr.repository_url
+  container_port        = var.container_port
+  desired_count         = var.desired_count
+  min_capacity          = var.min_capacity
+  max_capacity          = var.max_capacity
+  app_env               = var.environment
+  execution_role_arn    = module.iam.ecs_task_execution_role_arn
+  task_role_arn         = module.iam.ecs_task_role_arn
+  log_group_name        = module.monitoring.log_group_name
+  aws_region            = var.aws_region
+  tags                  = local.tags
 }

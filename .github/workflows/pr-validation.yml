@@ -112,7 +112,7 @@ jobs:
         run: docker build -t finzla-app:pr-${{ github.event.pull_request.number }} .
 
       - name: Container image vulnerability scan (Trivy)
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@master
         with:
           image-ref: finzla-app:pr-${{ github.event.pull_request.number }}
           severity: "CRITICAL,HIGH"

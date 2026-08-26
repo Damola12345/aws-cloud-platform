@@ -41,8 +41,8 @@ resource "aws_cloudwatch_metric_alarm" "target_5xx" {
   }
 
   alarm_description = "More than 5 HTTP 5xx responses from application targets in a 3-minute window."
-  alarm_actions      = [aws_sns_topic.alerts.arn]
-  ok_actions          = [aws_sns_topic.alerts.arn]
+  alarm_actions     = [aws_sns_topic.alerts.arn]
+  ok_actions        = [aws_sns_topic.alerts.arn]
 
   tags = var.tags
 }
@@ -69,9 +69,9 @@ resource "aws_cloudwatch_metric_alarm" "unhealthy_targets" {
     TargetGroup  = var.target_group_arn_suffix
   }
 
-  alarm_description  = "One or more ECS targets are failing ALB health checks."
-  alarm_actions      = [aws_sns_topic.alerts.arn]
-  ok_actions         = [aws_sns_topic.alerts.arn]
+  alarm_description = "One or more ECS targets are failing ALB health checks."
+  alarm_actions     = [aws_sns_topic.alerts.arn]
+  ok_actions        = [aws_sns_topic.alerts.arn]
 
   tags = var.tags
 }
@@ -98,9 +98,9 @@ resource "aws_cloudwatch_metric_alarm" "running_task_count_low" {
     ServiceName = var.ecs_service_name
   }
 
-  alarm_description  = "Fewer than 1 healthy task running - service is at risk of a full outage."
-  alarm_actions      = [aws_sns_topic.alerts.arn]
-  ok_actions         = [aws_sns_topic.alerts.arn]
+  alarm_description = "Fewer than 1 healthy task running - service is at risk of a full outage."
+  alarm_actions     = [aws_sns_topic.alerts.arn]
+  ok_actions        = [aws_sns_topic.alerts.arn]
 
   tags = var.tags
 }
@@ -126,8 +126,8 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
     ServiceName = var.ecs_service_name
   }
 
-  alarm_description  = "Sustained high CPU - informational/capacity signal, not paged urgently (autoscaling should react first)."
-  alarm_actions      = [aws_sns_topic.alerts.arn]
+  alarm_description = "Sustained high CPU - informational/capacity signal, not paged urgently (autoscaling should react first)."
+  alarm_actions     = [aws_sns_topic.alerts.arn]
 
   tags = var.tags
 }

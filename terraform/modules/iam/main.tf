@@ -219,8 +219,8 @@ data "aws_iam_policy_document" "github_deploy_permissions" {
   }
 
   statement {
-    sid    = "PassRoleToECSTasksOnly"
-    effect = "Allow"
+    sid     = "PassRoleToECSTasksOnly"
+    effect  = "Allow"
     actions = ["iam:PassRole"]
     resources = [
       "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.name}-ecs-task-execution",
