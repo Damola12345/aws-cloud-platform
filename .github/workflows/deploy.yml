@@ -1,6 +1,7 @@
 name: Build, Push & Deploy
 
 on:
+  workflow_dispatch: {}
   push:
     branches: [master] # runs only after a PR has been reviewed and merged
     paths:
@@ -9,9 +10,7 @@ on:
       - ".dockerignore"
       - ".github/workflows/deploy.yml"
       - ".github/actions/ecs-deploy/**"
-    # Deliberately NOT terraform/** - infra changes go through infra.yml
-    # instead, so a pure infra PR doesn't trigger an unnecessary image
-    # rebuild/redeploy, and vice versa.
+
 
 permissions:
   id-token: write
