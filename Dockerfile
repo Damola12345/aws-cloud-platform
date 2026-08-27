@@ -1,14 +1,20 @@
 # builder
-FROM python:3.12-slim AS builder
+FROM python:3.12-slim-bookworm AS builder
 
 WORKDIR /build
 COPY app/requirements.txt .
 RUN python -m venv /opt/venv \
-    && /opt/venv/bin/pip install --no-cache-dir --upgrade pip setuptools \
+    && /opt/venv/bin/pip install --no-cache-dir --upgrade pip "setuptools>=78.1.1" \
     && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
 
 # runtime
 FROM python:3.12-slim AS runtime
+
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir --upgrade pip "setuptools>=78.1.1"
+RUN find / -xdev \( -iname "setuptools-*.egg-info" -o -iname "setuptools-*.dist-info" \) 2>/dev/null | xargs -r rm -rf
+
 
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
