@@ -1,11 +1,5 @@
 name: Terraform Apply (Infrastructure)
 
-# This is separate from deploy.yml (build/push/deploy the app). It only
-# triggers when infrastructure code actually changes, and it uses the
-# terraform_apply roles created once in terraform/bootstrap - NOT the
-# app-scoped github_deploy roles used by deploy.yml, which cannot touch
-# IAM/VPC/ALB at all.
-
 on:
   push:
     branches: [master]

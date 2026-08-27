@@ -118,3 +118,4 @@ jobs:
           image-ref: finzla-app:pr-${{ github.event.pull_request.number }}
           severity: "CRITICAL,HIGH"
           exit-code: "1" # fail the PR check on critical/high vulnerabilities
+          trivyignores: .trivyignore
