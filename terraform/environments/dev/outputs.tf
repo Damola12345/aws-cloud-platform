@@ -20,13 +20,8 @@ output "ecs_service_name" {
   value = local.service_name
 }
 
-output "github_ci_role_arn" {
-  description = "Set as AWS_CI_ROLE_ARN in the GitHub repo/environment"
-  value       = module.iam.github_ci_role_arn
-}
-
 output "github_deploy_role_arn" {
-  description = "Set as AWS_DEPLOY_ROLE_ARN in the GitHub environment secrets for this environment"
+  description = "Set as AWS_DEPLOY_ROLE_ARN_DEV in GitHub. (AWS_CI_ROLE_ARN comes from terraform/bootstrap's output instead - see that directory's README note on why.)"
   value       = module.iam.github_deploy_role_arn
 }
 

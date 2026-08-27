@@ -45,97 +45,21 @@ resource "aws_iam_role" "ecs_task" {
 # =============================================================================
 # 3. GitHub OIDC federation - lets GitHub Actions assume AWS roles with a
 #    short-lived token instead of long-lived access keys stored as secrets.
-#    The provider itself is created ONCE, account-wide, in terraform/bootstrap
-#    (so it survives this environment being destroyed and recreated). Its ARN
-#    is fully deterministic from the account ID, so it's referenced here as a
-#    plain string - no cross-state data source needed.
+#    The provider itself, AND the read-only `github_ci` plan role, are both
+#    created ONCE in terraform/bootstrap - not here. Why: github_ci is needed
+#    to pass the PR check on the very first PR, but this environment's own
+#    Terraform (which is what would otherwise create it) doesn't exist until
+#    AFTER that PR merges. Creating it in bootstrap instead breaks that
+#    circular dependency - see terraform/bootstrap/iam-ci.tf.
+#    The OIDC provider ARN is fully deterministic from the account ID, so
+#    it's referenced here as a plain string - no cross-state data source
+#    needed.
 # =============================================================================
 
 locals {
   oidc_provider_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/token.actions.githubusercontent.com"
 }
 
-# -----------------------------------------------------------------------------
-# 3a. CI / plan role - assumable from ANY branch or PR in this repo.
-#     Read-only: used for `terraform fmt/validate/plan` and `terraform plan`
-#     on pull requests. Cannot change any AWS resource.
-# -----------------------------------------------------------------------------
-
-data "aws_iam_policy_document" "github_ci_trust" {
-  statement {
-    actions = ["sts:AssumeRoleWithWebIdentity"]
-    principals {
-      type        = "Federated"
-      identifiers = [local.oidc_provider_arn]
-    }
-    condition {
-      test     = "StringEquals"
-      variable = "token.actions.githubusercontent.com:aud"
-      values   = ["sts.amazonaws.com"]
-    }
-    # Any ref (branch/PR) in this exact repo - nothing else.
-    condition {
-      test     = "StringLike"
-      variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_org}/${var.github_repo}:*"]
-    }
-  }
-}
-
-resource "aws_iam_role" "github_ci" {
-  name               = "${var.name}-gha-ci"
-  assume_role_policy = data.aws_iam_policy_document.github_ci_trust.json
-  tags               = var.tags
-}
-
-data "aws_iam_policy_document" "github_ci_permissions" {
-  statement {
-    sid    = "TerraformStateReadOnly"
-    effect = "Allow"
-    actions = [
-      "s3:GetObject",
-      "s3:ListBucket",
-      "dynamodb:GetItem",
-      "dynamodb:DescribeTable",
-    ]
-    resources = ["*"] # scoped to the actual state bucket/table ARNs in the bootstrap config; wildcard here keeps the module reusable
-  }
-
-  statement {
-    sid    = "ReadOnlyPlan"
-    effect = "Allow"
-    actions = [
-      "ec2:Describe*",
-      "ecs:Describe*",
-      "ecs:List*",
-      "ecr:Describe*",
-      "ecr:GetRepositoryPolicy",
-      "elasticloadbalancing:Describe*",
-      "iam:GetRole",
-      "iam:GetRolePolicy",
-      "iam:ListRolePolicies",
-      "iam:ListAttachedRolePolicies",
-      "logs:Describe*",
-      "cloudwatch:Describe*",
-      "cloudwatch:GetMetricData",
-      "cloudwatch:ListMetrics",
-      "sns:GetTopicAttributes",
-      "application-autoscaling:Describe*",
-      "acm:ListCertificates",
-      "acm:DescribeCertificate",
-      "route53:ListHostedZonesByName",
-      "route53:GetHostedZone",
-      "route53:ListResourceRecordSets",
-    ]
-    resources = ["*"] # read-only describe/list/get calls only - no mutating verbs are granted anywhere in this policy
-  }
-}
-
-resource "aws_iam_role_policy" "github_ci" {
-  name   = "${var.name}-gha-ci-readonly"
-  role   = aws_iam_role.github_ci.id
-  policy = data.aws_iam_policy_document.github_ci_permissions.json
-}
 
 # -----------------------------------------------------------------------------
 # 3b. Deploy role - assumable ONLY when the workflow job declares

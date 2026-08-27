@@ -11,3 +11,8 @@ output "terraform_apply_role_arn_prod" {
 output "oidc_provider_arn" {
   value = aws_iam_openid_connect_provider.github.arn
 }
+
+output "github_ci_role_arn" {
+  description = "Set as AWS_CI_ROLE_ARN in GitHub - available immediately after bootstrap apply, before any environment exists"
+  value       = aws_iam_role.github_ci.arn
+}
