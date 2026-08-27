@@ -4,13 +4,11 @@ FROM python:3.12-slim AS builder
 WORKDIR /build
 COPY app/requirements.txt .
 RUN python -m venv /opt/venv \
-    && /opt/venv/bin/pip install --no-cache-dir --upgrade pip "setuptools>=78.1.1" \
+    && /opt/venv/bin/pip install --no-cache-dir --upgrade pip setuptools \
     && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
 
 # runtime
 FROM python:3.12-slim AS runtime
-
-RUN pip install --no-cache-dir --upgrade "setuptools>=78.1.1"
 
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
