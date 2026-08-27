@@ -12,6 +12,7 @@ data "aws_iam_policy_document" "github_ci_trust" {
       values   = ["sts.amazonaws.com"]
     }
 
+    # variable comments in main.tf for why plain names alone don't match.
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
@@ -35,8 +36,9 @@ data "aws_iam_policy_document" "github_ci_permissions" {
       "s3:ListBucket",
       "dynamodb:GetItem",
       "dynamodb:DescribeTable",
+      "dynamodb:PutItem",
+      "dynamodb:DeleteItem",
     ]
-
     resources = [
       "arn:aws:s3:::finzla-terraform-state-dev",
       "arn:aws:s3:::finzla-terraform-state-dev/*",
@@ -46,7 +48,6 @@ data "aws_iam_policy_document" "github_ci_permissions" {
       "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/finzla-terraform-locks-prod",
     ]
   }
-
 
   statement {
     sid    = "ReadOnlyPlan"
