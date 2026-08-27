@@ -11,7 +11,7 @@ data "aws_iam_policy_document" "github_ci_trust" {
       variable = "token.actions.githubusercontent.com:aud"
       values   = ["sts.amazonaws.com"]
     }
-    
+
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
@@ -36,7 +36,7 @@ data "aws_iam_policy_document" "github_ci_permissions" {
       "dynamodb:GetItem",
       "dynamodb:DescribeTable",
     ]
-    
+
     resources = [
       "arn:aws:s3:::finzla-terraform-state-dev",
       "arn:aws:s3:::finzla-terraform-state-dev/*",
@@ -47,7 +47,7 @@ data "aws_iam_policy_document" "github_ci_permissions" {
     ]
   }
 
-  
+
   statement {
     sid    = "ReadOnlyPlan"
     effect = "Allow"
