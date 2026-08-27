@@ -11,8 +11,12 @@ RUN python -m venv /opt/venv \
 FROM python:3.12-slim AS runtime
 
 RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
-RUN apt-get purge -y python3-setuptools python3-setuptools-whl 2>/dev/null || true
+RUN apt-get purge -y python3-setuptools python3-setuptools-whl 2>&1 | tee /tmp/purge.log; \
+    (grep -q "Removing python3-setuptools" /tmp/purge.log && echo "apt purge: removed the apt-level package") \
+    || echo "apt purge: nothing removed (package absent or already gone) - relying on the exact-version fallback below"; \
+    rm -f /tmp/purge.log
 
+RUN find / -xdev \( -iname "setuptools-70.3.0.egg-info" -o -iname "setuptools-70.3.0.dist-info" \) 2>/dev/null | xargs -r rm -rf
 
 RUN pip install --no-cache-dir --upgrade pip "setuptools>=78.1.1"
 
