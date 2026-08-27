@@ -16,7 +16,7 @@ RUN apt-get purge -y python3-setuptools python3-setuptools-whl 2>&1 | tee /tmp/p
     || echo "apt purge: nothing removed (package absent or already gone) - relying on the exact-version fallback below"; \
     rm -f /tmp/purge.log
 
-RUN find / -xdev \( -iname "setuptools-70.3.0.egg-info" -o -iname "setuptools-70.3.0.dist-info" \) 2>/dev/null | xargs -r rm -rf
+RUN find / -xdev \( -iname "setuptools-70.3.0*.egg-info" -o -iname "setuptools-70.3.0*.dist-info" \) 2>/dev/null | xargs -r rm -rf
 
 RUN pip install --no-cache-dir --upgrade pip "setuptools>=78.1.1"
 
