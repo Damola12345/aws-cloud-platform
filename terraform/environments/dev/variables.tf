@@ -60,6 +60,16 @@ variable "github_repo" {
   default = "finzla-platform"
 }
 
+variable "github_org_id" {
+  description = "GitHub org/user's immutable numeric ID"
+  type        = string
+}
+
+variable "github_repo_id" {
+  description = "GitHub repo's immutable numeric ID"
+  type        = string
+}
+
 variable "alarm_email" {
   type = string
 }
