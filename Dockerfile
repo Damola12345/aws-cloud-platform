@@ -11,9 +11,10 @@ RUN python -m venv /opt/venv \
 FROM python:3.12-slim AS runtime
 
 RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+RUN apt-get purge -y python3-setuptools python3-setuptools-whl 2>/dev/null || true
+
 
 RUN pip install --no-cache-dir --upgrade pip "setuptools>=78.1.1"
-RUN find / -xdev \( -iname "setuptools-*.egg-info" -o -iname "setuptools-*.dist-info" \) 2>/dev/null | xargs -r rm -rf
 
 
 ENV PATH="/opt/venv/bin:$PATH" \
