@@ -21,13 +21,10 @@ env:
   ECR_REPOSITORY: finzla-dev-app # dev and prod share one image; the same immutable tag is promoted, never rebuilt
 
 jobs:
-  # ---------------------------------------------------------------------------
-  # Build once. The exact same image digest that passes dev is the one that
-  # gets promoted to prod - we never rebuild between environments.
-  # ---------------------------------------------------------------------------
   build-and-push:
     name: Build & push image
     runs-on: ubuntu-latest
+    environment: development
     outputs:
       image_tag: ${{ steps.meta.outputs.tag }}
     steps:
