@@ -1,0 +1,120 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  TF_ENV_DIR: terraform/environments/dev # PRs always plan against dev; prod plan is reviewed separately before promotion
+
+jobs:
+  terraform:
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    name: Terraform fmt / validate / plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.5"
+
+      - name: terraform fmt -check
+        working-directory: terraform
+        run: terraform fmt -check -recursive
+
+      # Must run BEFORE terraform init: init contacts the S3 backend
+      # immediately (reading/creating the state file), so credentials have
+      # to exist before init, not just before plan.
+      - name: Configure AWS credentials (read-only CI role)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_CI_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: terraform init
+        working-directory: ${{ env.TF_ENV_DIR }}
+        run: terraform init -backend=true
+
+      - name: terraform validate
+        working-directory: ${{ env.TF_ENV_DIR }}
+        run: terraform validate
+
+      - name: terraform plan
+        working-directory: ${{ env.TF_ENV_DIR }}
+        run: terraform plan -no-color -out=tfplan.binary | tee plan_output.txt
+
+      - name: Comment plan on PR (update in place, not a new comment per push)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('${{ env.TF_ENV_DIR }}/plan_output.txt', 'utf8').slice(0, 60000);
+            const marker = '<!-- terraform-plan-dev -->';
+            const body = `${marker}\n#### Terraform Plan (dev)\n<details><summary>Show plan</summary>\n\n\`\`\`\n${plan}\n\`\`\`\n</details>`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: IaC security scan (tfsec)
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: terraform
+
+  application:
+    permissions:
+      contents: read
+    name: Build & test application
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r app/requirements-dev.txt
+
+      - name: Lint (ruff)
+        run: ruff check app
+
+      - name: Unit tests
+        run: pytest app/tests -q
+
+      - name: Build Docker image (build only, not pushed)
+        run: docker build -t finzla-app:pr-${{ github.event.pull_request.number }} .
+
+      - name: Container image vulnerability scan (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: finzla-app:pr-${{ github.event.pull_request.number }}
+          severity: "CRITICAL,HIGH"
+          exit-code: "1" # fail the PR check on critical/high vulnerabilities

@@ -1,0 +1,113 @@
+name: "ECS Deploy"
+description: "Registers a new task definition revision with the given image tag, updates the ECS service, and waits for it to stabilize."
+
+inputs:
+  cluster:
+    required: true
+  service:
+    required: true
+  repository:
+    required: true
+    description: "ECR repository name (without registry/account prefix)"
+  image_tag:
+    required: true
+  build_number:
+    required: true
+    description: "CI run number, injected into the task definition's BUILD_NUMBER env var"
+  git_commit:
+    required: true
+    description: "Full git SHA, injected into the task definition's GIT_COMMIT env var"
+
+outputs:
+  alb_dns_name:
+    description: "DNS name of the load balancer fronting this service, for the caller's health check step"
+    value: ${{ steps.get-alb.outputs.dns_name }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Resolve current task definition family
+      id: current-task-def
+      shell: bash
+      run: |
+        TASK_DEF_ARN=$(aws ecs describe-services \
+          --cluster "${{ inputs.cluster }}" \
+          --services "${{ inputs.service }}" \
+          --query "services[0].taskDefinition" --output text)
+        echo "arn=$TASK_DEF_ARN" >> "$GITHUB_OUTPUT"
+
+    - name: Render new task definition with updated image
+      id: render
+      shell: bash
+      run: |
+        aws ecs describe-task-definition \
+          --task-definition "${{ steps.current-task-def.outputs.arn }}" \
+          --query "taskDefinition" > task-def.json
+
+        REGISTRY=$(aws sts get-caller-identity --query Account --output text).dkr.ecr.${AWS_REGION:-us-east-1}.amazonaws.com
+        NEW_IMAGE="${REGISTRY}/${{ inputs.repository }}:${{ inputs.image_tag }}"
+
+        # Strip the read-only fields describe-task-definition adds, and swap
+        # in the new image + full deployment metadata (APP_VERSION,
+        # BUILD_NUMBER, GIT_COMMIT) so GET /version reflects exactly what
+        # GitHub Actions built and deployed, not whatever Terraform's
+        # original task definition happened to contain.
+        jq \
+          --arg IMAGE "$NEW_IMAGE" \
+          --arg VER "${{ inputs.image_tag }}" \
+          --arg BUILD "${{ inputs.build_number }}" \
+          --arg COMMIT "${{ inputs.git_commit }}" '
+          .containerDefinitions[0].image = $IMAGE
+          | .containerDefinitions[0].environment |= map(
+              if .name == "APP_VERSION" then .value = $VER
+              elif .name == "BUILD_NUMBER" then .value = $BUILD
+              elif .name == "GIT_COMMIT" then .value = $COMMIT
+              else . end
+            )
+          | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)
+        ' task-def.json > new-task-def.json
+
+    - name: Register new task definition revision
+      id: register
+      shell: bash
+      run: |
+        NEW_ARN=$(aws ecs register-task-definition \
+          --cli-input-json file://new-task-def.json \
+          --query "taskDefinition.taskDefinitionArn" --output text)
+        echo "arn=$NEW_ARN" >> "$GITHUB_OUTPUT"
+
+    - name: Update service to new revision
+      shell: bash
+      run: |
+        aws ecs update-service \
+          --cluster "${{ inputs.cluster }}" \
+          --service "${{ inputs.service }}" \
+          --task-definition "${{ steps.register.outputs.arn }}" \
+          --force-new-deployment
+
+    - name: Wait for service to stabilize
+      shell: bash
+      # This waits for ECS's own rollout to finish (respecting the deployment
+      # circuit breaker configured in Terraform: if the new tasks fail their
+      # health checks, ECS rolls back automatically and this wait command
+      # will reflect the *stable, rolled-back* state rather than hang forever).
+      run: |
+        aws ecs wait services-stable \
+          --cluster "${{ inputs.cluster }}" \
+          --services "${{ inputs.service }}"
+
+    - name: Get ALB DNS name for health check
+      id: get-alb
+      shell: bash
+      run: |
+        LB_ARN=$(aws elbv2 describe-load-balancers \
+          --query "LoadBalancers[?contains(LoadBalancerName, '${{ inputs.cluster }}') || contains(LoadBalancerName, '${{ inputs.service }}')].LoadBalancerArn | [0]" \
+          --output text 2>/dev/null || true)
+        if [ -z "$LB_ARN" ] || [ "$LB_ARN" = "None" ]; then
+          # Fall back to the naming convention used by the alb module (<project>-<env>-alb)
+          NAME_GUESS=$(echo "${{ inputs.cluster }}" | sed 's/-cluster$/-alb/')
+          DNS=$(aws elbv2 describe-load-balancers --names "$NAME_GUESS" --query "LoadBalancers[0].DNSName" --output text)
+        else
+          DNS=$(aws elbv2 describe-load-balancers --load-balancer-arns "$LB_ARN" --query "LoadBalancers[0].DNSName" --output text)
+        fi
+        echo "dns_name=$DNS" >> "$GITHUB_OUTPUT"

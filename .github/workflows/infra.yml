@@ -1,0 +1,122 @@
+name: Terraform Apply (Infrastructure)
+
+# This is separate from deploy.yml (build/push/deploy the app). It only
+# triggers when infrastructure code actually changes, and it uses the
+# terraform_apply roles created once in terraform/bootstrap - NOT the
+# app-scoped github_deploy roles used by deploy.yml, which cannot touch
+# IAM/VPC/ALB at all.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "terraform/**"
+      - ".github/workflows/infra.yml"
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  TF_VERSION: "1.9.5"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Dev applies automatically on merge - no separate approval gate beyond the
+  # PR review that already happened to get here. This mirrors deploy.yml's
+  # "dev moves fast" philosophy.
+  # ---------------------------------------------------------------------------
+  apply-dev:
+    name: Apply - dev infrastructure
+    runs-on: ubuntu-latest
+    environment: infra-dev # binds the OIDC sub claim used by terraform_apply's dev trust policy
+    defaults:
+      run:
+        working-directory: terraform/environments/dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_APPLY_ROLE_ARN_DEV }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - run: terraform init
+
+      - run: terraform plan -out=tfplan
+
+      # Apply the EXACT plan just reviewed above, not a fresh plan - avoids
+      # a time-of-check/time-of-use gap between what was reviewed and what
+      # actually gets applied.
+      - run: terraform apply -auto-approve tfplan
+
+  # ---------------------------------------------------------------------------
+  # Prod: plan first (unblocked, so the plan output is visible in the job log
+  # for whoever needs to approve), THEN a separate gated job applies the
+  # exact plan artifact - never a fresh plan - once approved.
+  # ---------------------------------------------------------------------------
+  plan-prod:
+    name: Plan - prod infrastructure (for review)
+    runs-on: ubuntu-latest
+    needs: apply-dev
+    defaults:
+      run:
+        working-directory: terraform/environments/prod
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_APPLY_ROLE_ARN_PROD }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - run: terraform init
+
+      - run: terraform plan -out=tfplan
+
+      - name: Print human-readable plan (for the approver to read before approving apply-prod)
+        run: terraform show -no-color tfplan
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prod-tfplan
+          path: terraform/environments/prod/tfplan
+          retention-days: 1
+
+  apply-prod:
+    name: Apply - prod infrastructure (requires approval)
+    runs-on: ubuntu-latest
+    needs: plan-prod
+    environment: infra-prod # required reviewers configured here - the job will not start until approved
+    defaults:
+      run:
+        working-directory: terraform/environments/prod
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: prod-tfplan
+          path: terraform/environments/prod
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_APPLY_ROLE_ARN_PROD }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - run: terraform init
+
+      - run: terraform apply -auto-approve tfplan
