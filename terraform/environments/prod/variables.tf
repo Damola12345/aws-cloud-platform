@@ -57,7 +57,7 @@ variable "github_org" {
 
 variable "github_repo" {
   type    = string
-  default = "finzla-platform"
+  default = "aws-cloud-platform"
 }
 
 variable "github_org_id" {

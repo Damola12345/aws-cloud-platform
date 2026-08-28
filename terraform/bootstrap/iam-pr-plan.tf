@@ -134,6 +134,8 @@ data "aws_iam_policy_document" "github_ci_permissions" {
       "application-autoscaling:Describe*",
       "acm:ListCertificates",
       "acm:DescribeCertificate",
+      "acm:ListTagsForCertificate",
+      "route53:ListHostedZones",
       "route53:ListHostedZonesByName",
       "route53:GetHostedZone",
       "route53:ListResourceRecordSets",

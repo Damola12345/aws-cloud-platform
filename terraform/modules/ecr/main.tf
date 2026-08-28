@@ -1,7 +1,8 @@
 resource "aws_ecr_repository" "this" {
   name                 = var.name
-  image_tag_mutability = "IMMUTABLE" # a given tag (e.g. a git SHA) can never be overwritten
-
+  image_tag_mutability = "IMMUTABLE" 
+  force_delete = true
+  
   image_scanning_configuration {
     scan_on_push = true # basic vulnerability scanning - satisfies the "security check" requirement too
   }
