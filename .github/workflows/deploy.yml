@@ -1,153 +1,148 @@
-name: Build, Push & Deploy
+# name: Build, Push & Deploy
 
-on:
-  workflow_dispatch: {}
-  push:
-    branches: [master] # runs only after a PR has been reviewed and merged
-    paths:
-      - "app/**"
-      - "Dockerfile"
-      - ".dockerignore"
-      - ".github/workflows/deploy.yml"
-      - ".github/actions/ecs-deploy/**"
+# on:
+#   workflow_dispatch: {}
+#   push:
+#     branches: [master] # runs only after a PR has been reviewed and merged
+#     paths:
+#       - "app/**"
+#       - "Dockerfile"
+#       - ".dockerignore"
+#       - ".github/workflows/deploy.yml"
+#       - ".github/actions/ecs-deploy/**"
 
 
-permissions:
-  id-token: write
-  contents: read
+# permissions:
+#   id-token: write
+#   contents: read
 
-env:
-  AWS_REGION: us-east-1
-  ECR_REPOSITORY: finzla-dev-app # dev and prod share one image; the same immutable tag is promoted, never rebuilt
+# env:
+#   AWS_REGION: us-east-1
+#   ECR_REPOSITORY: finzla-dev-app # dev and prod share one image; the same immutable tag is promoted, never rebuilt
 
-jobs:
-  build-and-push:
-    name: Build & push image
-    runs-on: ubuntu-latest
-    environment: development
-    outputs:
-      image_tag: ${{ steps.meta.outputs.tag }}
-    steps:
-      - uses: actions/checkout@v4
+# jobs:
+#   build-and-push:
+#     name: Build & push image
+#     runs-on: ubuntu-latest
+#     environment: development
+#     outputs:
+#       image_tag: ${{ steps.meta.outputs.tag }}
+#     steps:
+#       - uses: actions/checkout@v4
 
-      - id: meta
-        run: echo "tag=sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+#       - id: meta
+#         run: echo "tag=sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
 
-      # This job runs under the dev-scoped deploy role purely to get ECR
-      # push rights - it is not deploying anything into any environment yet.
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN_DEV }}
-          aws-region: ${{ env.AWS_REGION }}
+#       # This job runs under the dev-scoped deploy role purely to get ECR
+#       # push rights - it is not deploying anything into any environment yet.
+#       - name: Configure AWS credentials
+#         uses: aws-actions/configure-aws-credentials@v4
+#         with:
+#           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN_DEV }}
+#           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to ECR
-        id: ecr-login
-        uses: aws-actions/amazon-ecr-login@v2
+#       - name: Login to ECR
+#         id: ecr-login
+#         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build image
-        # No --build-arg for APP_VERSION/BUILD_NUMBER/GIT_COMMIT - the image
-        # is generic. Those get injected as ECS task definition environment
-        # variables at deploy time instead (see .github/actions/ecs-deploy),
-        # so the exact same image digest is promoted from dev to prod.
-        run: |
-          docker build \
-            -t ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.meta.outputs.tag }} .
+#       - name: Build image
+#         # No --build-arg for APP_VERSION/BUILD_NUMBER/GIT_COMMIT - the image
+#         # is generic. Those get injected as ECS task definition environment
+#         # variables at deploy time instead (see .github/actions/ecs-deploy),
+#         # so the exact same image digest is promoted from dev to prod.
+#         run: |
+#           docker build \
+#             -t ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.meta.outputs.tag }} .
 
-      - name: Push image
-        run: docker push ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.meta.outputs.tag }}
+#       - name: Push image
+#         run: docker push ${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.meta.outputs.tag }}
 
-  # ---------------------------------------------------------------------------
-  # Deploy to dev automatically. No manual gate - dev is meant to move fast.
-  # ---------------------------------------------------------------------------
-  deploy-dev:
-    name: Deploy to dev
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    environment: development # GitHub Environment - binds the OIDC "sub" claim used by the dev deploy role's trust policy
-    steps:
-      - uses: actions/checkout@v4
 
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN_DEV }}
-          aws-region: ${{ env.AWS_REGION }}
+#   # Deploy to dev automatically No manual gate  dev is meant to move fast.
+#   deploy-dev:
+#     name: Deploy to dev
+#     needs: build-and-push
+#     runs-on: ubuntu-latest
+#     environment: development # GitHub Environment - binds the OIDC "sub" claim used by the dev deploy role's trust policy
+#     steps:
+#       - uses: actions/checkout@v4
 
-      - name: Deploy
-        id: deploy
-        uses: ./.github/actions/ecs-deploy
-        with:
-          cluster: finzla-dev-cluster
-          service: finzla-dev-service
-          repository: finzla-dev-app
-          image_tag: ${{ needs.build-and-push.outputs.image_tag }}
-          build_number: ${{ github.run_number }}
-          git_commit: ${{ github.sha }}
+#       - uses: aws-actions/configure-aws-credentials@v4
+#         with:
+#           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN_DEV }}
+#           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Health check
-        run: |
-          ALB_DNS="${{ steps.deploy.outputs.alb_dns_name }}"
-          for i in $(seq 1 10); do
-            code=$(curl -sk -o /dev/null -w "%{http_code}" "https://${ALB_DNS}/health" || true)
-            if [ "$code" = "200" ]; then
-              echo "Healthy (attempt $i)"; exit 0
-            fi
-            echo "Not healthy yet (attempt $i, got $code), retrying in 15s..."
-            sleep 15
-          done
-          echo "::error::Service did not become healthy after deploy - see 'Handle unhealthy deployment' step"
-          exit 1
+#       - name: Deploy
+#         id: deploy
+#         uses: ./.github/actions/ecs-deploy
+#         with:
+#           cluster: finzla-dev-cluster
+#           service: finzla-dev-service
+#           repository: finzla-dev-app
+#           image_tag: ${{ needs.build-and-push.outputs.image_tag }}
+#           build_number: ${{ github.run_number }}
+#           git_commit: ${{ github.sha }}
 
-      - name: Handle unhealthy deployment
-        if: failure()
-        run: |
-          echo "Health check failed. The ECS deployment circuit breaker (rollback=true, configured in Terraform)
-          already auto-rolls back to the last healthy task definition when new tasks fail their health checks.
-          This step exists as a second line of defence: confirming via 'aws ecs describe-services' that the
-          service has returned to its previous stable task definition, and failing the workflow loudly so the
-          pipeline stops here and prod is never touched."
-          aws ecs describe-services --cluster finzla-dev-cluster --services finzla-dev-service \
-            --query "services[0].deployments" --output table
+#       - name: Health check
+#         run: |
+#           ALB_DNS="${{ steps.deploy.outputs.alb_dns_name }}"
+#           for i in $(seq 1 10); do
+#             code=$(curl -sk -o /dev/null -w "%{http_code}" "https://${ALB_DNS}/health" || true)
+#             if [ "$code" = "200" ]; then
+#               echo "Healthy (attempt $i)"; exit 0
+#             fi
+#             echo "Not healthy yet (attempt $i, got $code), retrying in 15s..."
+#             sleep 15
+#           done
+#           echo "::error::Service did not become healthy after deploy - see 'Handle unhealthy deployment' step"
+#           exit 1
 
-  # ---------------------------------------------------------------------------
-  # Deploy to prod - gated by the "production" GitHub Environment, which is
-  # configured with required reviewers. The job simply will not start
-  # running until someone with permission approves it (see README).
-  # ---------------------------------------------------------------------------
-  deploy-prod:
-    name: Deploy to prod
-    needs: [build-and-push, deploy-dev]
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - uses: actions/checkout@v4
+#       - name: Handle unhealthy deployment
+#         if: failure()
+#         run: |
+#           echo "Health check failed. The ECS deployment circuit breaker (rollback=true, configured in Terraform)
+#           already auto-rolls back to the last healthy task definition when new tasks fail their health checks.
+#           This step exists as a second line of defence: confirming via 'aws ecs describe-services' that the
+#           service has returned to its previous stable task definition, and failing the workflow loudly so the
+#           pipeline stops here and prod is never touched."
+#           aws ecs describe-services --cluster finzla-dev-cluster --services finzla-dev-service \
+#             --query "services[0].deployments" --output table
 
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN_PROD }}
-          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Deploy
-        id: deploy
-        uses: ./.github/actions/ecs-deploy
-        with:
-          cluster: finzla-prod-cluster
-          service: finzla-prod-service
-          repository: finzla-dev-app # same repo/digest promoted from dev, just re-tagged into the prod task definition
-          image_tag: ${{ needs.build-and-push.outputs.image_tag }}
-          build_number: ${{ github.run_number }}
-          git_commit: ${{ github.sha }}
+#   deploy-prod:
+#     name: Deploy to prod
+#     needs: [build-and-push, deploy-dev]
+#     runs-on: ubuntu-latest
+#     environment: production
+#     steps:
+#       - uses: actions/checkout@v4
 
-      - name: Health check
-        run: |
-          ALB_DNS="${{ steps.deploy.outputs.alb_dns_name }}"
-          for i in $(seq 1 10); do
-            code=$(curl -sk -o /dev/null -w "%{http_code}" "https://${ALB_DNS}/health" || true)
-            if [ "$code" = "200" ]; then
-              echo "Healthy (attempt $i)"; exit 0
-            fi
-            echo "Not healthy yet (attempt $i, got $code), retrying in 15s..."
-            sleep 15
-          done
-          echo "::error::Service did not become healthy after deploy"
-          exit 1
+#       - uses: aws-actions/configure-aws-credentials@v4
+#         with:
+#           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN_PROD }}
+#           aws-region: ${{ env.AWS_REGION }}
+
+#       - name: Deploy
+#         id: deploy
+#         uses: ./.github/actions/ecs-deploy
+#         with:
+#           cluster: finzla-prod-cluster
+#           service: finzla-prod-service
+#           repository: finzla-dev-app # same repo/digest promoted from dev, just re-tagged into the prod task definition
+#           image_tag: ${{ needs.build-and-push.outputs.image_tag }}
+#           build_number: ${{ github.run_number }}
+#           git_commit: ${{ github.sha }}
+
+#       - name: Health check
+#         run: |
+#           ALB_DNS="${{ steps.deploy.outputs.alb_dns_name }}"
+#           for i in $(seq 1 10); do
+#             code=$(curl -sk -o /dev/null -w "%{http_code}" "https://${ALB_DNS}/health" || true)
+#             if [ "$code" = "200" ]; then
+#               echo "Healthy (attempt $i)"; exit 0
+#             fi
+#             echo "Not healthy yet (attempt $i, got $code), retrying in 15s..."
+#             sleep 15
+#           done
+#           echo "::error::Service did not become healthy after deploy"
+#           exit 1

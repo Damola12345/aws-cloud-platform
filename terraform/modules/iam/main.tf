@@ -63,11 +63,12 @@ locals {
 
 # -----------------------------------------------------------------------------
 # 3b. Deploy role - assumable ONLY when the workflow job declares
-#     `environment: <var.environment>` in GitHub Actions. GitHub Environments
-#     can require manual reviewer approval before the job is allowed to run,
-#     which is what gates production deployments (see README "who can deploy").
-#     Scoped tightly: push to one ECR repo, update one ECS service, and
-#     PassRole only the two task roles this app actually uses.
+#     `environment: <var.github_environment>` in GitHub Actions. GitHub
+#     Environments can require manual reviewer approval before the job is
+#     allowed to run, which is what gates production deployments (see README
+#     "who can deploy"). Scoped tightly: push to one ECR repo, update one
+#     ECS service, and PassRole only the two task roles this app actually
+#     uses.
 # -----------------------------------------------------------------------------
 
 data "aws_iam_policy_document" "github_deploy_trust" {
@@ -85,7 +86,12 @@ data "aws_iam_policy_document" "github_deploy_trust" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_org}/${var.github_repo}:environment:${var.environment}"]
+      # ID-suffixed subject format - GitHub's actual sub claim for this
+      # account includes immutable numeric org/repo IDs, e.g.
+      # repo:ORG@ORG_ID/REPO@REPO_ID:environment:X - confirmed via
+      # CloudTrail against denied AssumeRoleWithWebIdentity events (see
+      # terraform/bootstrap/main.tf's github_org_id/github_repo_id comments).
+      values = ["repo:${var.github_org}@${var.github_org_id}/${var.github_repo}@${var.github_repo_id}:environment:${var.github_environment}"]
     }
   }
 }
@@ -165,6 +171,19 @@ data "aws_iam_policy_document" "github_deploy_permissions" {
       "logs:DescribeLogStreams",
     ]
     resources = ["${var.log_group_arn}:*"]
+  }
+
+  # elasticloadbalancing:DescribeLoadBalancers can't be resource-scoped -
+  # same class of AWS limitation as several actions in terraform_apply's
+  # policy (route53:ListHostedZones, logs:DescribeLogGroups, etc.): it's a
+  # "list what exists" operation, so resources = ["*"] is required
+  # regardless. Used by .github/actions/ecs-deploy to resolve the ALB's DNS
+  # name for the post-deploy health check.
+  statement {
+    sid       = "ELBDescribe"
+    effect    = "Allow"
+    actions   = ["elasticloadbalancing:DescribeLoadBalancers"]
+    resources = ["*"]
   }
 }
 

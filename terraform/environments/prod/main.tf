@@ -118,7 +118,10 @@ module "iam" {
   log_group_arn      = module.monitoring.log_group_arn
   github_org         = var.github_org
   github_repo        = var.github_repo
+  github_org_id      = var.github_org_id
+  github_repo_id     = var.github_repo_id
   environment        = var.environment
+  github_environment = "production" # must exactly match deploy.yml's `environment: production` job declaration
   tags               = local.tags
 }
 
