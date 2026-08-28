@@ -88,7 +88,7 @@ jobs:
         run: |
           ALB_DNS="${{ steps.deploy.outputs.alb_dns_name }}"
           for i in $(seq 1 10); do
-            code=$(curl -s -o /dev/null -w "%{http_code}" "https://${ALB_DNS}/health" || true)
+            code=$(curl -sk -o /dev/null -w "%{http_code}" "https://${ALB_DNS}/health" || true)
             if [ "$code" = "200" ]; then
               echo "Healthy (attempt $i)"; exit 0
             fi
@@ -142,7 +142,7 @@ jobs:
         run: |
           ALB_DNS="${{ steps.deploy.outputs.alb_dns_name }}"
           for i in $(seq 1 10); do
-            code=$(curl -s -o /dev/null -w "%{http_code}" "https://${ALB_DNS}/health" || true)
+            code=$(curl -sk -o /dev/null -w "%{http_code}" "https://${ALB_DNS}/health" || true)
             if [ "$code" = "200" ]; then
               echo "Healthy (attempt $i)"; exit 0
             fi
