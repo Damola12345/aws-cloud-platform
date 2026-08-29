@@ -34,15 +34,15 @@ variable "private_subnet_cidrs" {
 }
 
 variable "domain_name" {
-  description = "Root domain already hosted as a public zone in Route53, e.g. dglidestcl.com - also used to look up an already-issued ACM certificate for the ALB (must be ISSUED and cover this domain or a wildcard over it, in the same region as aws_region)"
+  description = "Root domain already hosted as a public zone in Route53, e.g. dxxxxx.com - also used to look up an already-issued ACM certificate for the ALB (must be ISSUED and cover this domain or a wildcard over it, in the same region as aws_region)"
   type        = string
-  default     = "dglidestcl.com"
+  default     = "dxxxxx.com"
 }
 
 variable "app_hostname" {
-  description = "Full hostname to create and point at the ALB, e.g. finzla-dev.dglidestcl.com. Must fall under domain_name (or its wildcard)."
+  description = "Full hostname to create and point at the ALB, e.g. finzla-dev.dxxxxx.com. Must fall under domain_name (or its wildcard)."
   type        = string
-  default     = "finzla-dev.dglidestcl.com"
+  default     = "finzla-dev.dxxxxx.com"
 }
 
 variable "create_dns_record" {
