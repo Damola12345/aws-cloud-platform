@@ -19,13 +19,7 @@ provider "aws" {
 
 data "aws_caller_identity" "current" {}
 
-# Looks up an already-issued certificate for domain_name (or a wildcard
-# covering it), in whatever region the provider above is configured for.
-# Terraform never creates or manages the certificate itself - this is a
-# read-only lookup of something that already exists in AWS, resolved fresh
-# on every plan/apply so there's no ARN to copy/paste or accidentally leak
-# (e.g. into a committed tfvars file, which is exactly the risk this
-# replaces - see the AWS account ID a raw ARN would otherwise expose).
+
 data "aws_acm_certificate" "this" {
   domain      = var.domain_name
   statuses    = ["ISSUED"]
@@ -47,9 +41,7 @@ locals {
   ecs_service_arn = "arn:aws:ecs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:service/${local.cluster_name}/${local.service_name}"
 }
 
-# ---------------------------------------------------------------------------
 # Networking
-# ---------------------------------------------------------------------------
 module "vpc" {
   source = "../../modules/vpc"
 
@@ -62,9 +54,7 @@ module "vpc" {
   tags                 = local.tags
 }
 
-# ---------------------------------------------------------------------------
 # Image repository
-# ---------------------------------------------------------------------------
 module "ecr" {
   source = "../../modules/ecr"
 
@@ -72,9 +62,8 @@ module "ecr" {
   tags = local.tags
 }
 
-# ---------------------------------------------------------------------------
+
 # Ingress
-# ---------------------------------------------------------------------------
 module "alb" {
   source = "../../modules/alb"
 
@@ -96,9 +85,7 @@ module "dns" {
   alb_zone_id  = module.alb.alb_zone_id
 }
 
-# ---------------------------------------------------------------------------
 # Logging & alerting (created before IAM/ECS so both can reference it)
-# ---------------------------------------------------------------------------
 module "monitoring" {
   source = "../../modules/monitoring"
 
@@ -112,9 +99,8 @@ module "monitoring" {
   tags                    = local.tags
 }
 
-# ---------------------------------------------------------------------------
+
 # IAM (least privilege ECS + scoped GitHub OIDC roles)
-# ---------------------------------------------------------------------------
 module "iam" {
   source = "../../modules/iam"
 
@@ -132,9 +118,8 @@ module "iam" {
   tags               = local.tags
 }
 
-# ---------------------------------------------------------------------------
+
 # Compute
-# ---------------------------------------------------------------------------
 module "ecs" {
   source = "../../modules/ecs"
 

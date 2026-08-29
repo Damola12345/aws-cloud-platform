@@ -1,18 +1,3 @@
-# ---------------------------------------------------------------------------
-# GitHub OIDC provider - account-wide, created exactly once, here, so it
-# survives every dev/prod destroy-and-recreate cycle. modules/iam (used by
-# environments/dev and environments/prod) references this by its
-# deterministic ARN (arn:aws:iam::<account>:oidc-provider/token.actions.
-# githubusercontent.com) as a plain string rather than a resource reference,
-# so those environments have no state dependency on this config.
-#
-# Thumbprint fetched dynamically rather than hardcoded: AWS actually ignores
-# thumbprint_list for GitHub's OIDC provider specifically (it validates via
-# its own trusted CA chain instead), but the resource schema still requires
-# a value - fetching it live means we're never trusting a value someone
-# typed from memory, and it stays correct automatically if GitHub ever
-# rotates their certificate.
-# ---------------------------------------------------------------------------
 
 data "tls_certificate" "github" {
   url = "https://token.actions.githubusercontent.com/.well-known/openid-configuration"
@@ -28,38 +13,7 @@ locals {
   oidc_provider_arn = aws_iam_openid_connect_provider.github.arn
 }
 
-# ---------------------------------------------------------------------------
-# terraform_apply roles - one per environment, each trusted only by a
-# dedicated GitHub Environment ("infra-dev" / "infra-prod"), SEPARATE from
-# the "development"/"production" environments the app-deploy pipeline uses.
-# That split lets infra approvers differ from app-deploy approvers (e.g.
-# only senior platform engineers can approve infra-prod, a wider group can
-# approve application-prod).
-#
-# THIS IS THE MOST POWERFUL ROLE IN THE ACCOUNT. It can create, modify, and
-# delete IAM roles/policies (including its own sibling app-deploy roles and,
-# in principle, itself) because Terraform has to manage those roles as
-# regular resources. That is an inherent self-escalation risk with any
-# "Terraform manages its own IAM" setup - there is no way to fully eliminate
-# it while still letting Terraform own IAM. What bounds it here:
-#   - Every resource-scoped statement below is restricted to the
-#     "finzla-*"/"finzla-<env>-*" naming prefix - it cannot touch IAM roles,
-#     policies, or other resources belonging to anything else in the account.
-#   - The OIDC trust condition only matches a workflow run that explicitly
-#     declares `environment: infra-{dev,prod}` AND whose token subject is
-#     this exact repo - not just any push to main.
-#   - infra-prod (below, environments/prod) is meant to have GitHub
-#     Environment required reviewers configured, exactly like the
-#     application "production" environment.
-#   - Every apply is preceded by a `terraform plan` a human can read before
-#     approving (see .github/workflows/infra.yml).
-# What is NOT fully solved: EC2/ELB/autoscaling actions below are scoped by
-# ACTION, not by RESOURCE, because AWS's IAM model doesn't support
-# resource-level restriction for most VPC/networking create calls. A
-# production hardening pass would tighten these further using IAM Access
-# Analyzer's policy generation against real CloudTrail activity after a few
-# applies, rather than a hand-written list guessed up front.
-# ---------------------------------------------------------------------------
+
 
 data "aws_iam_policy_document" "terraform_apply_trust" {
   for_each = toset(local.environments)
@@ -114,12 +68,7 @@ data "aws_iam_policy_document" "terraform_apply_permissions" {
     resources = ["arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/finzla-terraform-locks-${each.value}"]
   }
 
-  # --- Networking (VPC/subnets/NAT/routes/security groups) ---------------
-  # Action-scoped, not resource-scoped - see the module-level note above for
-  # why. Read-only Describe calls are unrestricted by nature; every mutating
-  # verb here only affects resources this same role created (by construction
-  # of what Terraform manages), and every create call is followed by a
-  # CreateTags call this project's naming convention makes traceable.
+  #Networking (VPC/subnets/NAT/routes/security groups)
   statement {
     sid    = "Networking"
     effect = "Allow"

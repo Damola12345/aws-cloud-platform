@@ -1,32 +1,3 @@
-# ---------------------------------------------------------------------------
-# One-time bootstrap: creates the S3 buckets + DynamoDB tables that the
-# dev/ and prod/ environments use as their remote state backend, PLUS the
-# GitHub OIDC provider and the "terraform_apply" IAM roles that let GitHub
-# Actions actually create/update/destroy the rest of the infrastructure.
-#
-# Why these live here and not in environments/dev or environments/prod: a
-# GitHub Actions workflow can't be the thing that creates the very first
-# piece of AWS infrastructure, because it needs an IAM role to assume - and
-# that role IS infrastructure. Everything in this file is the permanent,
-# human-managed foundation that survives a `terraform destroy` of dev/prod;
-# everything else (VPC, ALB, ECS, IAM app-roles, DNS, monitoring) is fully
-# destroyable and re-creatable by CI once this exists.
-#
-# This config itself uses LOCAL state (chicken-and-egg problem: you can't
-# store state for the thing that stores your state). Run it once per
-# account, by a human with elevated (but still not AdministratorAccess)
-# permissions, and then re-run `terraform apply` here only when you
-# deliberately want to change this foundation layer itself (e.g. rotating
-# the trusted repo) - it is intentionally kept out of the CI pipeline.
-#
-#   cd terraform/bootstrap
-#   terraform init
-#   terraform apply
-#
-# Separate buckets/tables per environment (rather than one shared bucket
-# with different keys) mean a mistake in dev tooling/permissions can never
-# touch prod state.
-# ---------------------------------------------------------------------------
 
 terraform {
   required_version = ">= 1.6.0"
@@ -63,21 +34,7 @@ variable "github_repo" {
   default = "finzla-platform"
 }
 
-# GitHub's OIDC token `sub` claim can (and, for some accounts/orgs,
-# apparently does by default) include the org's and repo's immutable
-# numeric IDs alongside their names, e.g.
-#   repo:Damola12345@82381308/aws-cloud-platform@1347051150:pull_request
-# instead of the "classic" repo:OWNER/REPO:pull_request. A trust policy
-# built only from names never matches that format at all - every
-# AssumeRoleWithWebIdentity call is silently rejected regardless of how
-# correct everything else is, which is exactly what happened here (see
-# CloudTrail: every denied event showed this ID-suffixed subject).
-#
-# Find these values with:
-#   gh api user --jq .id                      (or: gh api orgs/<org> --jq .id)
-#   gh api repos/<org>/<repo> --jq .id
-# or read them directly off a denied AssumeRoleWithWebIdentity CloudTrail
-# event's userIdentity.userName field, as done here.
+
 variable "github_org_id" {
   description = "GitHub org/user's immutable numeric ID - see comment above for how to find it"
   type        = string
@@ -93,16 +50,7 @@ locals {
   project      = "finzla"
 }
 
-# tfsec flags this bucket for missing access logging
-# (aws-s3-enable-bucket-logging, MEDIUM) - accepted deliberately for now: a
-# dedicated logging bucket (S3 access logs must target a separate bucket,
-# never the same one) adds a second bucket, its own lifecycle policy, and a
-# log-delivery bucket policy purely to audit access to a Terraform state
-# bucket only ever touched by this project's own IAM roles and a human's
-# scoped bootstrap credentials - no other principal in the account can
-# reach it at all (see the public-access-block below). Worth revisiting if
-# more people/roles ever get access to this account.
-#tfsec:ignore:aws-s3-enable-bucket-logging
+
 resource "aws_s3_bucket" "state" {
   for_each = toset(local.environments)
   bucket   = "finzla-terraform-state-${each.value}"
@@ -118,17 +66,7 @@ resource "aws_s3_bucket_versioning" "state" {
   }
 }
 
-# tfsec flags aws:kms (AWS-managed key) here as not customer-managed
-# (aws-s3-encryption-customer-key, HIGH) - accepted deliberately: a
-# customer-managed KMS key would mean creating and rotating a key plus
-# extending every IAM role that touches state (github_ci, terraform_apply,
-# a human's bootstrap credentials) with kms:Decrypt/GenerateDataKey grants,
-# for a bucket that deliberately never contains secrets (see README's
-# Security section) - the marginal confidentiality gain over AWS-managed
-# KMS encryption is small relative to that added surface area for this
-# project's scope. Worth reconsidering if this bucket ever needs to satisfy
-# a compliance requirement that specifically mandates customer-managed keys.
-#tfsec:ignore:aws-s3-encryption-customer-key
+
 resource "aws_s3_bucket_server_side_encryption_configuration" "state" {
   for_each = aws_s3_bucket.state
   bucket   = each.value.id
