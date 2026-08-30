@@ -512,28 +512,6 @@ statically over-provisioning. A NAT Gateway VPC endpoint strategy (S3/ECR/CloudW
 Logs gateway/interface endpoints) would further cut NAT data-processing costs and is a
 natural next optimization once real traffic patterns are known.
 
-**Production readiness** — the three most important improvements before calling this
-production-ready for a fintech platform:
-
-1. **A pre-traffic smoke/canary step** in the deploy pipeline (see incident prevention
-   above) rather than relying only on the in-place ECS health check - closes exactly the
-   gap this assessment's troubleshooting scenario describes.
-2. **WAF in front of the ALB** plus tighter ALB security group scoping (today it accepts
-   443 from anywhere, appropriate for a public API but worth revisiting if this ever
-   sits behind a corporate network or partner-only integration instead).
-3. **Separate AWS accounts for dev and prod** (AWS's own recommended pattern), rather
-   than one account with logical separation via naming/state/IAM as done here. That
-   would turn the `finzla-*` IAM-prefix scoping on `terraform_apply` (see
-   [Security](#security--the-most-sensitive-iam-role)) from "can't touch other apps in
-   this account" into "physically cannot touch prod at all from a dev context," and is
-   the natural next step now that infra changes are automated - it removes the last
-   remaining case where a dev-scoped credential and a prod-scoped credential share a
-   blast radius (the AWS account itself). A closely related follow-up: replace the
-   hand-written `ec2:*`/`ecs:*`/`elasticloadbalancing:*` action-level grants in
-   `terraform_apply`'s policy with a tighter, enumerated action list generated from IAM
-   Access Analyzer's policy generator against real CloudTrail activity after a few
-   applies, rather than a guessed-up-front list.
-
 ## Local development
 
 `.env` (gitignored - copy `.env.example` to create your own) holds local-only defaults:
