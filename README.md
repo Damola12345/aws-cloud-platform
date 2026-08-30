@@ -22,7 +22,7 @@ A minimal FastAPI service deployed to AWS ECS Fargate via Terraform and GitHub A
 
 ## Architecture
 
-![architecture diagram](diagrams/)
+![architecture diagram](diagrams/finzla_architecture.png)
 
 **Chosen: ECS on Fargate**, behind an internet-facing Application Load Balancer, across
 two (dev) or three (prod) AZs.
