@@ -1,4 +1,7 @@
-
+#tfsec:ignore:aws-iam-no-policy-wildcards
+# Every action in "ReadOnlyPlan" below is a read-only Describe/List/Get verb -
+# this role can never create, modify, or delete anything. AWS's IAM model
+# doesn't support resource-level scoping for most of these read APIs anyway.
 data "aws_iam_policy_document" "github_ci_trust" {
   statement {
     actions = ["sts:AssumeRoleWithWebIdentity"]
