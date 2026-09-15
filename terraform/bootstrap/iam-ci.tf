@@ -49,7 +49,7 @@ resource "aws_iam_role" "terraform_apply" {
 data "aws_iam_policy_document" "terraform_apply_permissions" {
   for_each = toset(local.environments)
 
-  # --- Terraform's own remote state for this one environment -------------
+  # Terraform's own remote state for this one environment 
   statement {
     sid    = "StateReadWrite"
     effect = "Allow"
@@ -89,7 +89,7 @@ data "aws_iam_policy_document" "terraform_apply_permissions" {
     resources = ["*"]
   }
 
-  # --- ECR - scoped to this project's repos only --------------------------
+  # ECR
   statement {
     sid       = "ECR"
     effect    = "Allow"
@@ -103,7 +103,7 @@ data "aws_iam_policy_document" "terraform_apply_permissions" {
     resources = ["*"]
   }
 
-  # --- ECS - cluster/service/task-def actions can't all be resource-scoped
+  # ECS  cluster/service/task-def actions can't all be resource-scoped
   statement {
     sid       = "ECS"
     effect    = "Allow"
@@ -111,7 +111,7 @@ data "aws_iam_policy_document" "terraform_apply_permissions" {
     resources = ["*"]
   }
 
-  # --- Load balancing -------------------------------------------------------
+  # Load balancing
   statement {
     sid       = "ELB"
     effect    = "Allow"
@@ -207,7 +207,7 @@ data "aws_iam_policy_document" "terraform_apply_permissions" {
     resources = ["*"]
   }
 
-  # --- STS, needed for the account-id/region data sources every module uses
+  # STS, needed for the account-id/region data sources every module uses
   statement {
     sid       = "STS"
     effect    = "Allow"

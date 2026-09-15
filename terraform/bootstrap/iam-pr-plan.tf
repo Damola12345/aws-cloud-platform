@@ -11,8 +11,7 @@ data "aws_iam_policy_document" "github_ci_trust" {
       variable = "token.actions.githubusercontent.com:aud"
       values   = ["sts.amazonaws.com"]
     }
-    # Any ref (branch/PR) in this exact repo - nothing else.
-    # NOTE: matches GitHub's ID-suffixed subject format
+
     # (repo:ORG@ORG_ID/REPO@REPO_ID:*) - see the github_org_id/github_repo_id
     # variable comments in main.tf for why plain names alone don't match.
     condition {
