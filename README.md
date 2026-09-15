@@ -1,4 +1,6 @@
-# Finzla Cloud & Platform Engineering Assessment
+# AWS Cloud Platform — Production-Oriented ECS/Fargate Reference Architecture
+
+*Originally built as a take-home technical assessment (Cloud & Platform Engineering) — kept here as a reference implementation of the patterns it covers: OIDC-based CI/CD, least-privilege IAM, env-separated Terraform, and a documented real incident investigation.*
 
 A minimal FastAPI service deployed to AWS ECS Fargate via Terraform and GitHub Actions.
 
@@ -51,7 +53,7 @@ internet directly - see [Request path](#request-path-internet---aws---applicatio
 
 ### Request path: Internet -> AWS -> Application
 
-1. A client resolves `finzla-dev.dglidestcl.com` via a **Route53 ALIAS record**
+1. A client resolves `finzla-dev.dblah.com` via a **Route53 ALIAS record**
    (`terraform/modules/dns`) pointing at the ALB, and connects over **HTTPS (443)**.
    The record is created and torn down by Terraform along with everything else - no
    manual DNS step. (An ALIAS rather than a CNAME: free to query, no TTL to manage, and
@@ -234,7 +236,7 @@ build-and-push  ->  deploy-dev (auto)  ->  deploy-prod (requires approval)
    - *In the pipeline*: if the `/health` polling loop still doesn't see a 200 (e.g. the
      ALB target group hasn't caught up yet, or the rollback itself is unhealthy), the
      job fails loudly, and `deploy-prod` never runs because it `needs: [..., deploy-dev]`.
-5. The **same immutable image tag** that passed dev is promoted to prod - prod never
+5. The **same immutable ECR image tag** that passed dev is promoted to prod - prod never
    rebuilds from source, so "what's running in prod" is always traceable to one build.
    (Precisely: this is tag-based, not digest-based, promotion - `finzla-dev-app:sha-
    <commit>`, not a `@sha256:...` reference. ECR's `image_tag_mutability = "IMMUTABLE"`
@@ -372,7 +374,7 @@ separate state).
 (the venv build step) never ships in the runtime image; runs as a dedicated non-root
 `app` user (`USER app`) rather than root; contains no AWS credentials or application
 secrets of any kind; and - as covered above - contains no deployment metadata either,
-so the same immutable image tag is what actually gets scanned, tested, and promoted
+so the same immutable ECR image tag is what actually gets scanned, tested, and promoted
 unchanged from dev to prod - tagged (`sha-<commit>`), not pinned by SHA-256 digest, and
 the ECR repository's `IMMUTABLE` tag-mutability setting is what makes that tag a
 reliable, un-overwritable reference in practice. The container-level `HEALTHCHECK` and the ALB target group's health
@@ -512,6 +514,28 @@ statically over-provisioning. A NAT Gateway VPC endpoint strategy (S3/ECR/CloudW
 Logs gateway/interface endpoints) would further cut NAT data-processing costs and is a
 natural next optimization once real traffic patterns are known.
 
+**Production readiness** — the three most important improvements before calling this
+production-ready for a fintech platform:
+
+1. **A pre-traffic smoke/canary step** in the deploy pipeline (see incident prevention
+   above) rather than relying only on the in-place ECS health check - closes exactly the
+   gap this assessment's troubleshooting scenario describes.
+2. **WAF in front of the ALB** plus tighter ALB security group scoping (today it accepts
+   443 from anywhere, appropriate for a public API but worth revisiting if this ever
+   sits behind a corporate network or partner-only integration instead).
+3. **Separate AWS accounts for dev and prod** (AWS's own recommended pattern), rather
+   than one account with logical separation via naming/state/IAM as done here. That
+   would turn the `finzla-*` IAM-prefix scoping on `terraform_apply` (see
+   [Security](#security--the-most-sensitive-iam-role)) from "can't touch other apps in
+   this account" into "physically cannot touch prod at all from a dev context," and is
+   the natural next step now that infra changes are automated - it removes the last
+   remaining case where a dev-scoped credential and a prod-scoped credential share a
+   blast radius (the AWS account itself). A closely related follow-up: replace the
+   hand-written `ec2:*`/`ecs:*`/`elasticloadbalancing:*` action-level grants in
+   `terraform_apply`'s policy with a tighter, enumerated action list generated from IAM
+   Access Analyzer's policy generator against real CloudTrail activity after a few
+   applies, rather than a guessed-up-front list.
+
 ## Local development
 
 `.env` (gitignored - copy `.env.example` to create your own) holds local-only defaults:
@@ -524,7 +548,7 @@ for why the same principle applies to the Docker image). So `.env` has to be han
 the process explicitly:
 
 ```bash
-cp .env.example .env   
+cp .env.example .env   # first time only - then edit if you want different local values
 
 # Run directly with uvicorn, using its built-in --env-file support:
 uvicorn app.main:app --host 0.0.0.0 --port 8080 --env-file .env
@@ -641,4 +665,3 @@ no more manual `terraform apply` needed for either, except `terraform destroy`, 
 stays a deliberate, manual, human action (see
 [Who can change infrastructure?](#who-can-change-infrastructure) for why the two
 pipelines are kept independent, and the PR convention that keeps that safe).
-

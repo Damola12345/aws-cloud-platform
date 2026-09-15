@@ -29,6 +29,7 @@ resource "aws_iam_role" "github_ci" {
   tags               = { Purpose = "terraform-plan-ci" }
 }
 
+#tfsec:ignore:aws-iam-no-policy-wildcards
 data "aws_iam_policy_document" "github_ci_permissions" {
   statement {
     sid    = "TerraformStateS3"

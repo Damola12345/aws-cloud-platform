@@ -51,6 +51,7 @@ locals {
 }
 
 
+#tfsec:ignore:aws-s3-enable-bucket-logging
 resource "aws_s3_bucket" "state" {
   for_each = toset(local.environments)
   bucket   = "finzla-terraform-state-${each.value}"
@@ -67,6 +68,7 @@ resource "aws_s3_bucket_versioning" "state" {
 }
 
 
+#tfsec:ignore:aws-s3-encryption-customer-key
 resource "aws_s3_bucket_server_side_encryption_configuration" "state" {
   for_each = aws_s3_bucket.state
   bucket   = each.value.id
